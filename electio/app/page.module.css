@@ -1,0 +1,234 @@
+.categories {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1rem;
+}
+
+.categories button {
+  background: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.activeTab {
+  color: var(--primary) !important;
+  position: relative;
+}
+
+.activeTab::after {
+  content: '';
+  position: absolute;
+  bottom: -1rem;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary);
+  box-shadow: 0 0 10px var(--highlight);
+}
+
+.inputArea {
+  display: flex;
+  gap: 1rem;
+}
+
+.inputArea input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  padding: 1rem 1.5rem;
+  color: #fff;
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.inputArea input:focus {
+  border-color: var(--primary);
+}
+
+.addBtn {
+  background: var(--primary);
+  color: #000;
+  width: 3.5rem;
+  border-radius: 1rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+/* TABLE GRID */
+.tableGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.75rem;
+  min-height: 100px;
+}
+
+.emptyMsg {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: rgba(255,255,255,0.3);
+  padding: 2rem;
+  font-style: italic;
+}
+
+.tableCell {
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  padding: 1rem;
+  text-align: center;
+}
+
+.tableCell:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.highlighted {
+  border-color: var(--primary) !important;
+  background: var(--highlight) !important;
+  transform: scale(1.05);
+  z-index: 10;
+  box-shadow: 0 0 20px var(--highlight);
+}
+
+.cellNum {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--primary);
+  opacity: 0.6;
+}
+
+.cellText {
+  font-size: 0.9rem;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.chip {
+  width: 24px;
+  height: 24px;
+  background: radial-gradient(circle, #fff 0%, var(--primary) 70%, #b8860b 100%);
+  border-radius: 50%;
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 900;
+  color: #000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  border: 1px dashed rgba(0,0,0,0.3);
+  animation: bounceIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+
+.removeSmall {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.5rem;
+  background: none;
+  color: rgba(255,255,255,0.2);
+  font-size: 1.2rem;
+}
+
+.removeSmall:hover {
+  color: var(--secondary);
+}
+
+/* ROULETTE VISUALS */
+.rouletteContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.wheelWrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.wheel {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 4px solid var(--border);
+  background: conic-gradient(
+    var(--secondary) 0% 50%,
+    var(--background) 50% 100%
+  );
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+}
+
+.pointer {
+  position: absolute;
+  top: -15px;
+  z-index: 20;
+  font-size: 1.5rem;
+  color: var(--primary);
+  filter: drop-shadow(0 0 5px var(--highlight));
+}
+
+.spinning {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.winnerCard {
+  text-align: center;
+  border: 2px solid var(--primary);
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.winnerCard p {
+  font-size: 0.8rem;
+  letter-spacing: 2px;
+  color: var(--primary);
+  margin-bottom: 0.5rem;
+}
+
+.winnerCard h2 {
+  font-size: 2rem;
+  color: #fff;
+}
+
+.riskMsg {
+  margin-top: 1rem;
+  font-weight: 800;
+  color: var(--secondary) !important;
+  font-style: italic;
+}
+
+@keyframes popIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

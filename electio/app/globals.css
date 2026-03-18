@@ -1,0 +1,92 @@
+:root {
+  --background: #050505;
+  --foreground: #ffffff;
+  --primary: #ffd700; /* Gold */
+  --secondary: #d40000; /* Roulette Red */
+  --accent: #008000; /* Roulette Green */
+  --card-bg: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.1);
+  --highlight: rgba(255, 215, 0, 0.2);
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+main {
+  width: 100%;
+  max-width: 600px;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+h1 {
+  font-size: 3rem;
+  font-weight: 900;
+  text-align: center;
+  background: linear-gradient(to bottom, var(--primary), #b8860b);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+.subtitle {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 4px;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Add some glassmorphism classes */
+.glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+
+button.primary {
+  background: var(--primary);
+  color: #000;
+  font-weight: 700;
+  padding: 1rem 2rem;
+  border-radius: 99px;
+  box-shadow: 0 4px 15px var(--highlight);
+}
+
+button.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px var(--highlight);
+}
+
+button.primary:active {
+  transform: translateY(0);
+}
