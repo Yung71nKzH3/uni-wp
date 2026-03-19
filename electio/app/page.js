@@ -8,10 +8,10 @@ export default function Home() {
   const [inputValue, setInputValue] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [activeCategory, setActiveCategory] = useState("Eat");
 
   const [chips, setChips] = useState({}); // { optionId: boolean }
   const [highlightedId, setHighlightedId] = useState(null);
+  const [rotationDegrees, setRotationDegrees] = useState(0);
 
   // LocalStorage Persistence (Week 6)
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function Home() {
   const addOption = (e) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
-    setOptions([...options, { id: Date.now(), text: inputValue.trim(), category: activeCategory }]);
+    setOptions([...options, { id: Date.now(), text: inputValue.trim() }]);
     setInputValue("");
   };
 
@@ -37,16 +37,14 @@ export default function Home() {
     setChips(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const filteredOptions = options.filter(opt => opt.category === activeCategory);
-
   const spinRoulette = () => {
-    if (filteredOptions.length < 2) return;
+    if (options.length < 2) return;
     setIsSpinning(true);
     setWinner(null);
     setHighlightedId(null);
 
     // Calculate Weights for Risk Chips
-    const weightedOptions = filteredOptions.map(opt => {
+    const weightedOptions = options.map(opt => {
       let weight = 100; // base weight
       if (chips[opt.id]) {
         const isUp = Math.random() > 0.5;
@@ -68,20 +66,34 @@ export default function Home() {
       random -= opt.weight;
     }
 
-    // Animation Loop: Cycling through cells
-    let cycleCount = 0;
-    const maxCycles = 20;
-    const interval = setInterval(() => {
-      setHighlightedId(filteredOptions[cycleCount % filteredOptions.length].id);
-      cycleCount++;
-      if (cycleCount > maxCycles) {
-        clearInterval(interval);
-        setHighlightedId(selectedWinner.id);
-        setWinner(selectedWinner);
-        setIsSpinning(false);
-      }
-    }, 100);
+    const winnerIndex = options.findIndex(o => o.id === selectedWinner.id);
+    const sliceAngle = 360 / options.length;
+    
+    // Calculate Rotation: Target angle places the winner at 0 degrees (top).
+    // The visual wheel slices are offset, so we compute exactly where the slice sits.
+    const targetAngle = 1800 + (360 - (winnerIndex * sliceAngle + sliceAngle / 2));
+    
+    setRotationDegrees(prev => prev + targetAngle);
+
+    // Finalize after 3s CSS transition
+    setTimeout(() => {
+      setHighlightedId(selectedWinner.id);
+      setWinner(selectedWinner);
+      setIsSpinning(false);
+    }, 3000);
   };
+
+  // Generate Conic Gradient for the Wheel
+  let wheelGradient = "var(--border) 0deg 360deg";
+  if (options.length > 0) {
+    wheelGradient = options.map((opt, i) => {
+      const startAngle = (i * 360) / options.length;
+      const endAngle = ((i + 1) * 360) / options.length;
+      // Vibrant alternative colors
+      const color = i % 2 === 0 ? "var(--secondary)" : "var(--primary)";
+      return `${color} ${startAngle}deg ${endAngle}deg`;
+    }).join(", ");
+  }
 
   return (
     <main>
@@ -91,43 +103,30 @@ export default function Home() {
       </header>
 
       <section className="glass">
-        <div className={styles.categories}>
-          {["Eat", "Do", "Buy"].map((cat) => (
-            <button
-              key={cat}
-              className={activeCategory === cat ? styles.activeTab : ""}
-              onClick={() => {
-                setActiveCategory(cat);
-                setWinner(null);
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
         <form onSubmit={addOption} className={styles.inputArea}>
           <input
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder={`Add option to ${activeCategory}...`}
+            placeholder={`Add an option...`}
+            disabled={isSpinning}
           />
-          <button type="submit" className={styles.addBtn}>+</button>
+          <button type="submit" className={styles.addBtn} disabled={isSpinning}>+</button>
         </form>
       </section>
 
       {/* DYNAMIC ROULETTE TABLE */}
       <section className={`${styles.tableGrid} glass`}>
-        {filteredOptions.length === 0 ? (
+        {options.length === 0 ? (
           <p className={styles.emptyMsg}>Add options to populate the table</p>
         ) : (
-          filteredOptions.map((opt, index) => (
+          options.map((opt, index) => (
             <div 
               key={opt.id} 
               className={`${styles.tableCell} ${highlightedId === opt.id ? styles.highlighted : ""}`}
-              onClick={() => toggleChip(opt.id)}
+              onClick={() => !isSpinning && toggleChip(opt.id)}
             >
+              <div className={styles.cellColor} style={{ background: index % 2 === 0 ? 'var(--secondary)' : 'var(--primary)' }}></div>
               <div className={styles.cellNum}>{index + 1}</div>
               <div className={styles.cellText}>{opt.text}</div>
               {chips[opt.id] && <div className={styles.chip}>C</div>}
@@ -135,7 +134,7 @@ export default function Home() {
                 className={styles.removeSmall}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setOptions(options.filter(o => o.id !== opt.id));
+                  if (!isSpinning) setOptions(options.filter(o => o.id !== opt.id));
                 }}
               >
                 ×
@@ -149,17 +148,21 @@ export default function Home() {
       <section className={`${styles.rouletteContainer} glass`}>
         <div className={styles.wheelWrapper}>
           <div className={styles.pointer}>▼</div>
-          <div className={`${styles.wheel} ${isSpinning ? styles.spinning : ""}`}>
-            {/* Minimalist wheel design */}
-          </div>
+          <div 
+            className={styles.wheel}
+            style={{ 
+              background: `conic-gradient(${wheelGradient})`,
+              transform: `rotate(${rotationDegrees}deg)`
+            }}
+          ></div>
         </div>
         
         <button 
-          className="primary" 
+          className="primary spinBtn" 
           onClick={spinRoulette}
-          disabled={isSpinning || filteredOptions.length < 2}
+          disabled={isSpinning || options.length < 2}
         >
-          {isSpinning ? "SPINNING..." : `SPIN ${activeCategory.toUpperCase()}`}
+          {isSpinning ? "SPINNING..." : `SPIN WHEEL`}
         </button>
       </section>
 
