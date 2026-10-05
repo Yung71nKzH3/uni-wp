@@ -514,6 +514,24 @@
   margin-top: 0.25rem;
 }
 
+.copyLinkBtn {
+  background: rgba(255, 215, 0, 0.15);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+  padding: 0.6rem 1.2rem;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.copyLinkBtn:hover {
+  background: var(--primary);
+  color: #000;
+  transform: scale(1.02);
+}
+
 .leaveBtn {
   background: rgba(212,0,0,0.2);
   color: #ff6b6b;
@@ -521,6 +539,12 @@
   padding: 0.6rem 1.2rem;
   border-radius: 99px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.leaveBtn:hover {
+  background: rgba(212,0,0,0.35);
 }
 
 .closeModalBtn {

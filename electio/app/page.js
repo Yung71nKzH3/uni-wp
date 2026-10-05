@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
 import confetti from "canvas-confetti";
 import { io } from "socket.io-client";
 import styles from "./page.module.css";
@@ -8,7 +8,7 @@ import styles from "./page.module.css";
 const PRESETS = {
   dinner: ["Pizza 🍕", "Sushi 🍣", "Burgers 🍔", "Tacos 🌮", "Thai 🍜", "Pasta 🍝"],
   decisions: ["Yes 👍", "No 👎", "Maybe 🤔", "Spin Again 🔄"],
-  activities: ["Movie Night 🍿", "Gym Session 🏋️", "Gaming 🎮", "Read Book 📚", "Walk in Park 🌳"]
+  activities: ["Movie Night 🍿", "Gym Session 🏋️", "Gaming 🎮", "Read Book 📚", "Walk in Park 🌳"],
 };
 
 // Generate 4-digit numeric room code
@@ -31,13 +31,15 @@ const playTickSound = (audioCtx) => {
     gain.connect(audioCtx.destination);
     osc.start();
     osc.stop(audioCtx.currentTime + 0.05);
-  } catch (e) {}
+  } catch (e) {
+    // Audio context may be suspended or unsupported
+  }
 };
 
 const playFanfareSound = (audioCtx) => {
   if (!audioCtx) return;
   try {
-    const notes = [523.25, 659.25, 783.99, 1046.50];
+    const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((freq, i) => {
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
@@ -55,7 +57,9 @@ const playFanfareSound = (audioCtx) => {
       osc.start(startTime);
       osc.stop(startTime + 0.5);
     });
-  } catch (e) {}
+  } catch (e) {
+    // Audio context may be suspended or unsupported
+  }
 };
 
 export default function Home() {
@@ -63,7 +67,11 @@ export default function Home() {
   const [inputValue, setInputValue] = useState("");
   const [isSpinning, setIsSpinning] = useState(false);
   const [winner, setWinner] = useState(null);
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const [chips, setChips] = useState({});
@@ -72,32 +80,128 @@ export default function Home() {
 
   // Socket & Room States
   const [roomCode, setRoomCode] = useState("");
-  const [joinInputCode, setJoinInputCode] = useState("");
+  const [joinInputCode, setJoinInputCode] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const param = new URLSearchParams(window.location.search).get("room");
+    return param && /^\d{4}$/.test(param) ? param : "";
+  });
   const [roomNameInput, setRoomNameInput] = useState("");
   const [isConnected, setIsConnected] = useState(false);
   const [peerCount, setPeerCount] = useState(1);
-  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [showRoomModal, setShowRoomModal] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const param = new URLSearchParams(window.location.search).get("room");
+    return !!(param && /^\d{4}$/.test(param));
+  });
   const [publicRooms, setPublicRooms] = useState([]);
   const [networkIp, setNetworkIp] = useState("");
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const socketRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  const getAudioContext = () => {
-    if (!soundEnabled) return null;
-    if (!audioCtxRef.current) {
+  // Live mutable refs to eliminate stale closure bugs in socket listeners
+  const optionsRef = useRef(options);
+  const chipsRef = useRef(chips);
+  const soundEnabledRef = useRef(soundEnabled);
+  const isSpinningRef = useRef(isSpinning);
+  const rotationDegreesRef = useRef(rotationDegrees);
+  const roomCodeRef = useRef(roomCode);
+  const isConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+  useEffect(() => {
+    chipsRef.current = chips;
+  }, [chips]);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+  useEffect(() => {
+    isSpinningRef.current = isSpinning;
+  }, [isSpinning]);
+  useEffect(() => {
+    rotationDegreesRef.current = rotationDegrees;
+  }, [rotationDegrees]);
+  useEffect(() => {
+    roomCodeRef.current = roomCode;
+  }, [roomCode]);
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  const getAudioContext = useCallback(() => {
+    if (!soundEnabledRef.current) return null;
+    if (!audioCtxRef.current && typeof window !== "undefined") {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (AudioCtx) audioCtxRef.current = new AudioCtx();
     }
     if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
-      audioCtxRef.current.resume();
+      audioCtxRef.current.resume().catch(() => {});
     }
     return audioCtxRef.current;
-  };
+  }, []);
+
+  // Reliable spin animation with exact modulo wheel alignment
+  const executeSpinAnimation = useCallback((selectedWinner, winnerIndex, weightedOpts) => {
+    const audioCtx = getAudioContext();
+    setIsSpinning(true);
+    isSpinningRef.current = true;
+    setWinner(null);
+    setHighlightedId(null);
+
+    // Number of options at the moment of spin
+    const count = (weightedOpts && weightedOpts.length) || optionsRef.current.length;
+    if (count < 2) {
+      setIsSpinning(false);
+      isSpinningRef.current = false;
+      return;
+    }
+
+    const sliceAngle = 360 / count;
+    // Midpoint angle of winning slice from 12 o'clock (0 deg)
+    const midAngle = winnerIndex * sliceAngle + sliceAngle / 2;
+
+    // Target wheel rotation (mod 360) so midAngle aligns with top pointer (0 deg)
+    const targetMod = (360 - (midAngle % 360)) % 360;
+    const currentMod = ((rotationDegreesRef.current % 360) + 360) % 360;
+    const delta = (targetMod - currentMod + 360) % 360;
+    const extraSpins = 1800; // 5 full rotations (360 * 5)
+    const nextRotation = rotationDegreesRef.current + extraSpins + delta;
+
+    setRotationDegrees(nextRotation);
+    rotationDegreesRef.current = nextRotation;
+
+    const tickTimes = [100, 250, 450, 700, 1000, 1350, 1750, 2200, 2650];
+    tickTimes.forEach((delay) => {
+      setTimeout(() => playTickSound(audioCtx), delay);
+    });
+
+    setTimeout(() => {
+      setHighlightedId(selectedWinner?.id ?? null);
+      setWinner(selectedWinner);
+      setIsSpinning(false);
+      isSpinningRef.current = false;
+
+      playFanfareSound(audioCtx);
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+        colors: ["#ffd700", "#d40000", "#ffffff", "#008000"],
+      });
+    }, 3000);
+  }, [getAudioContext]);
+
+  // Keep a stable ref to executeSpinAnimation for socket handlers
+  const executeSpinAnimationRef = useRef(executeSpinAnimation);
+  useEffect(() => {
+    executeSpinAnimationRef.current = executeSpinAnimation;
+  }, [executeSpinAnimation]);
 
   // Initialize Socket.io Connection
   useEffect(() => {
-    setIsMounted(true);
     const socket = io();
     socketRef.current = socket;
 
@@ -112,8 +216,8 @@ export default function Home() {
     });
 
     socket.on("ROOM_STATE_SYNC", ({ options: newOpts, chips: newChips }) => {
-      setOptions(newOpts);
-      setChips(newChips);
+      setOptions(newOpts || []);
+      setChips(newChips || {});
     });
 
     socket.on("PLAYER_COUNT_UPDATE", (count) => {
@@ -121,24 +225,35 @@ export default function Home() {
     });
 
     socket.on("SPIN_EVENT", ({ selectedWinner, winnerIndex, weightedOptions }) => {
-      executeSpinAnimation(selectedWinner, winnerIndex, weightedOptions);
+      executeSpinAnimationRef.current(selectedWinner, winnerIndex, weightedOptions);
+    });
+
+    socket.on("SPIN_FINISHED", () => {
+      setIsSpinning(false);
+      isSpinningRef.current = false;
     });
 
     return () => {
+      if (roomCodeRef.current) {
+        socket.emit("LEAVE_ROOM", { roomCode: roomCodeRef.current });
+      }
       socket.disconnect();
     };
   }, []);
 
   // Hydration-safe LocalStorage Persistence
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("electio-options");
-      const savedChips = localStorage.getItem("electio-chips");
-      if (saved) setOptions(JSON.parse(saved));
-      if (savedChips) setChips(JSON.parse(savedChips));
-    } catch (e) {
-      console.error("Failed to parse stored electio state:", e);
-    }
+    const frame = requestAnimationFrame(() => {
+      try {
+        const saved = localStorage.getItem("electio-options");
+        const savedChips = localStorage.getItem("electio-chips");
+        if (saved) setOptions(JSON.parse(saved));
+        if (savedChips) setChips(JSON.parse(savedChips));
+      } catch (e) {
+        console.error("Failed to parse stored electio state:", e);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -153,17 +268,19 @@ export default function Home() {
     const roomTitle = roomNameInput.trim() || `Group Room #${code}`;
 
     if (!socketRef.current) return;
-    socketRef.current.emit("CREATE_ROOM", { roomCode: code, name: roomTitle }, (res) => {
-      if (res?.success) {
-        setRoomCode(code);
-        setIsConnected(true);
-        setPeerCount(1);
-        setShowRoomModal(false);
-
-        // Sync initial options
-        socketRef.current.emit("UPDATE_ROOM_STATE", { roomCode: code, options, chips });
+    socketRef.current.emit(
+      "CREATE_ROOM",
+      { roomCode: code, name: roomTitle, options, chips },
+      (res) => {
+        if (res?.success) {
+          const finalCode = res.roomCode || code;
+          setRoomCode(finalCode);
+          setIsConnected(true);
+          setPeerCount(1);
+          setShowRoomModal(false);
+        }
       }
-    });
+    );
   };
 
   // Join a Room with 4-digit code/password
@@ -177,6 +294,7 @@ export default function Home() {
         setIsConnected(true);
         setOptions(res.options || []);
         setChips(res.chips || {});
+        if (res.isSpinning) setIsSpinning(true);
         setShowRoomModal(false);
       } else {
         alert(res?.error || "Could not find room with code #" + code);
@@ -185,14 +303,29 @@ export default function Home() {
   };
 
   const leaveRoom = () => {
+    if (socketRef.current && roomCode) {
+      socketRef.current.emit("LEAVE_ROOM", { roomCode });
+    }
     setIsConnected(false);
     setRoomCode("");
     setPeerCount(1);
   };
 
+  const copyInviteLink = () => {
+    if (typeof window === "undefined" || !roomCode) return;
+    const host = networkIp ? `http://${networkIp}:3000` : window.location.origin;
+    const shareUrl = `${host}/?room=${roomCode}`;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(shareUrl).then(() => {
+        setCopiedLink(true);
+        setTimeout(() => setCopiedLink(false), 2000);
+      });
+    }
+  };
+
   const addOption = (e) => {
     e?.preventDefault();
-    if (!inputValue.trim()) return;
+    if (!inputValue.trim() || isSpinning) return;
     const newOpt = { id: Date.now(), text: inputValue.trim() };
     const updated = [...options, newOpt];
 
@@ -254,41 +387,10 @@ export default function Home() {
     }
   };
 
-  const executeSpinAnimation = (selectedWinner, winnerIndex, weightedOpts) => {
-    const audioCtx = getAudioContext();
-    setIsSpinning(true);
-    setWinner(null);
-    setHighlightedId(null);
-
-    const sliceAngle = 360 / options.length;
-    const extraSpins = 1800;
-    const targetAngle = extraSpins + (360 - (winnerIndex * sliceAngle + sliceAngle / 2));
-
-    setRotationDegrees((prev) => prev + targetAngle);
-
-    const tickTimes = [100, 250, 450, 700, 1000, 1350, 1750, 2200, 2650];
-    tickTimes.forEach((delay) => {
-      setTimeout(() => playTickSound(audioCtx), delay);
-    });
-
-    setTimeout(() => {
-      setHighlightedId(selectedWinner.id);
-      setWinner(selectedWinner);
-      setIsSpinning(false);
-
-      playFanfareSound(audioCtx);
-      confetti({
-        particleCount: 120,
-        spread: 80,
-        origin: { y: 0.6 },
-        colors: ["#ffd700", "#d40000", "#ffffff", "#008000"],
-      });
-    }, 3000);
-  };
-
   const spinRoulette = () => {
     if (options.length < 2 || isSpinning) return;
 
+    // Apply risk chip weights
     const weightedOptions = options.map((opt) => {
       let weight = 100;
       let isRiskApplied = false;
@@ -315,6 +417,7 @@ export default function Home() {
     const winnerIndex = options.findIndex((o) => o.id === selectedWinner.id);
 
     if (isConnected && socketRef.current) {
+      // In multiplayer: notify room, which triggers spin animation for everyone simultaneously
       socketRef.current.emit("TRIGGER_SPIN", {
         roomCode,
         selectedWinner,
@@ -383,6 +486,11 @@ export default function Home() {
                   PIN / Passcode: <span>{roomCode}</span>
                 </div>
                 <p>Players Connected: <strong>{peerCount}</strong></p>
+
+                <button className={styles.copyLinkBtn} onClick={copyInviteLink}>
+                  {copiedLink ? "✓ Invite Link Copied!" : "📋 Copy Invite Link"}
+                </button>
+
                 <button className={styles.leaveBtn} onClick={leaveRoom}>
                   Leave Room (Solo Mode)
                 </button>
@@ -413,9 +521,12 @@ export default function Home() {
                       <div key={r.roomCode} className={styles.roomCard}>
                         <div className={styles.roomCardLeft}>
                           <strong>{r.name}</strong>
-                          <span>PIN: #{r.roomCode} • {r.playerCount} players</span>
+                          <span>PIN: #{r.roomCode} • {r.playerCount} player{r.playerCount > 1 ? "s" : ""}{r.isSpinning ? " • 🔄 Spinning" : ""}</span>
                         </div>
-                        <button className={styles.joinCardBtn} onClick={() => joinRoom(r.roomCode)}>
+                        <button
+                          className={styles.joinCardBtn}
+                          onClick={() => joinRoom(r.roomCode)}
+                        >
                           Join
                         </button>
                       </div>
@@ -498,7 +609,7 @@ export default function Home() {
                 key={opt.id}
                 className={`${styles.tableCell} ${highlightedId === opt.id ? styles.highlighted : ""}`}
                 onClick={() => toggleChip(opt.id)}
-                title="Click to toggle Risk Chip (C)"
+                title={isSpinning ? undefined : "Click to toggle Risk Chip (C)"}
               >
                 <div
                   className={styles.cellColor}
@@ -585,7 +696,3 @@ export default function Home() {
     </main>
   );
 }
-
-
-
-
